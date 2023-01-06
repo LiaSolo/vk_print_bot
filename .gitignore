@@ -1,0 +1,7 @@
+/venv/
+/.idea/
+server
+client
+data
+files_to_send
+vk_bot/vk_config.py
