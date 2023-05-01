@@ -19,3 +19,4 @@ class State(Enum):
     MAINTENANCE = auto()
     ASK_INFO = auto()
     ASK_COPIES = auto()
+    CLEAR_QUEUE = auto()

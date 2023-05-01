@@ -4,6 +4,7 @@ from information import Info
 from vk_api.keyboard import VkKeyboard, VkKeyboardColor
 from bd_worker_vk import DB
 from vk_config import server_addr
+import os
 
 import requests
 import PyPDF2
@@ -17,11 +18,13 @@ to_printer_keyboard = VkKeyboard()
 to_printer_keyboard.add_button("К выбору принтера", color=VkKeyboardColor.POSITIVE)
 
 admin_keyboard = VkKeyboard()
-admin_keyboard.add_button("Забанить/Разбанить", color=VkKeyboardColor.POSITIVE)
+admin_keyboard.add_button("Забанить", color=VkKeyboardColor.POSITIVE)
 admin_keyboard.add_button("Изменить лимит", color=VkKeyboardColor.POSITIVE)
 admin_keyboard.add_line()
-admin_keyboard.add_button("Информация", color=VkKeyboardColor.POSITIVE)
 admin_keyboard.add_button("Режим ТО", color=VkKeyboardColor.POSITIVE)
+admin_keyboard.add_line()
+admin_keyboard.add_button("Информация", color=VkKeyboardColor.POSITIVE)
+admin_keyboard.add_button("Статистика", color=VkKeyboardColor.POSITIVE)
 admin_keyboard.add_line()
 admin_keyboard.add_button("Добавить листы в принтер", color=VkKeyboardColor.POSITIVE)
 admin_keyboard.add_line()
@@ -54,8 +57,8 @@ send_to_print_keyboard.add_button("К выбору принтера", color=VkKe
 
 
 printers_keyboard = VkKeyboard()
-printers_keyboard.add_button("Принтер_1", color=VkKeyboardColor.POSITIVE)
-printers_keyboard.add_button("Принтер_2", color=VkKeyboardColor.POSITIVE)
+printers_keyboard.add_button("L364-Series", color=VkKeyboardColor.POSITIVE)
+printers_keyboard.add_button("ML-1660-Series", color=VkKeyboardColor.POSITIVE)
 
 
 
@@ -69,28 +72,20 @@ class Condition:
 
     @staticmethod
     def condition_check_existing(bot, id_user):
-        if not DB.is_user_exist(id_user):
-            DB.add_user(id_user)
+        if not DB.is_registred(int(id_user)):
+            DB.db_table_val(int(id_user), 50, "it")
             Send.send_message(bot, id_user, "Авторизация прошла успешно!")
-
-
-        # if not DB.is_registred(int(id_user)):
-        #     DB.db_table_val(int(id_user), 50, "it")
-        #     Send.send_message(bot, id_user, "Авторизация прошла успешно!")
 
         return Condition.condition_choose_printer(bot, id_user)
 
     @staticmethod
-    def condition_check_ban(bot, id_user):
-        if DB.is_user_ban(id_user):
-            Send.send_message(bot, id_user, "Вы заблокированы!")
-            return Info.positions_dict[id_user]
-        else:
-            return Condition.condition_send_print(bot, id_user)
+    def condition_choose_printer(bot, id_user):
+        Send.send_message_with_keyboard(bot, id_user, "Выберите доступный принтер", printers_keyboard)
+        return State.CHOOSE_PRINTER
 
     @staticmethod
     def condition_wait_file(bot, id_user):
-        if DB.check_paper(Info.person_printer[id_user]) < 10:
+        if DB.check_is_alarmed_bd(Info.person_printer[id_user]):
             Send.send_message_with_keyboard(bot, id_user, "Внимание! \nВ выбранном принтере менее 10 листов!",
                                             default_keyboard)
         Send.send_message_with_keyboard(bot, id_user, "Жду pdf-файл для печати", default_keyboard)
@@ -108,20 +103,24 @@ class Condition:
         response = requests.get(url)
 
         Info.titles[id_user] = title
-        with open(title, 'wb') as pdf:
+        full_path = os.path.join('C:\\Users\\samos\\PycharmProjects\\vk_print_bot\\files_to_send', title)
+        with open(full_path, 'wb+') as pdf:
             pdf.write(response.content)
+            pdf_reader = PyPDF2.PdfReader(pdf)
+            Info.person_pages[id_user] = len(pdf_reader.pages)
 
         return Condition.condition_extra_settings(bot, id_user)
 
     @staticmethod
     def condition_make_pdf(bot, id_user, pages):
         file_name = Info.titles[id_user]
-        input_file = PyPDF2.PdfFileReader(file_name)
-        pdf_writer = PyPDF2.PdfFileWriter()
+        full_path = os.path.join('C:\\Users\\samos\\PycharmProjects\\vk_print_bot\\files_to_send', file_name)
+        input_file = PyPDF2.PdfReader(full_path)
+        pdf_writer = PyPDF2.PdfWriter()
 
-        with open(Info.titles[id_user], 'rb') as file:
-            pdf_reader = PyPDF2.PdfFileReader(file)
-            num_pages = pdf_reader.getNumPages()
+        with open(full_path, 'rb') as file:
+            pdf_reader = PyPDF2.PdfReader(file)
+            num_pages = len(pdf_reader.pages)
 
         for i in pages:
             try:
@@ -131,17 +130,20 @@ class Condition:
                         Send.send_message(bot, id_user, f"Неверный формат ввода!")
                         return State.WAIT_EXTRA_SETTINGS
                     for p in range(beg, end + 1):
-                        pdf_writer.addPage(input_file.getPage(p - 1))
+                        pdf_writer.add_page(input_file.pages[p - 1])
                 else:
-                     pdf_writer.addPage(input_file.getPage(int(i) - 1))
+                     pdf_writer.add_page(input_file.pages[int(i) - 1])
             except:
                 Send.send_message(bot, id_user, f"Неверный формат ввода!")
                 return State.WAIT_EXTRA_SETTINGS
 
         new_file_name = file_name + "_selected pages.pdf"
-        with open(new_file_name, 'wb') as output_file:
-            pdf_writer.write(output_file)
         Info.titles[id_user] = new_file_name
+
+        full_path = os.path.join('C:\\Users\\samos\\PycharmProjects\\vk_print_bot\\files_to_send', new_file_name)
+        with open(full_path, 'wb+') as output_file:
+            pdf_writer.write(output_file)
+            Info.person_pages[id_user] = len(PyPDF2.PdfReader(output_file).pages)
 
         return Condition.condition_ask_copies(bot, id_user)
 
@@ -149,11 +151,6 @@ class Condition:
     def condition_extra_settings(bot, id_user):
         Send.send_message_with_keyboard(bot, id_user, "Укажите дополнительные настройки", extra_settings_keyboard)
         return State.PRINT_SETTINGS
-
-    @staticmethod
-    def condition_choose_printer(bot, id_user):
-        Send.send_message_with_keyboard(bot, id_user, "Выберите доступный принтер", printers_keyboard)
-        return State.CHOOSE_PRINTER
 
     @staticmethod
     def condition_need_settings(bot, id_user):
@@ -168,60 +165,93 @@ class Condition:
         return State.ASK_COPIES
 
     @staticmethod
-    def condition_check_limit(bot, id_user):
-        Send.send_message(bot, id_user, "Проверяю лимит")
-        print(Info.titles)
-
-        with open(Info.titles[id_user], 'rb') as file:
-            pdf_reader = PyPDF2.PdfFileReader(file)
-            num_pages = pdf_reader.getNumPages()*Info.person_copies[id_user]
-
-        left_pages = DB.check_limit(id_user)
-        text = f"Осталось {left_pages} страниц. Вы хотите распечатать {num_pages} страниц. "
-        if left_pages >= num_pages:
-            text += "Отправить на печать?"
-            Send.send_message_with_keyboard(bot, id_user, text, send_to_print_keyboard)
-            return State.LIMIT_OK
-        else:
-            text += "Вы не можете распечатать файл!"
-            Send.send_message_with_keyboard(bot, id_user, text, not_enough_pages_keyboard)
+    def condition_full_check(bot, id_user):
+        info_user = (DB.data_by_id(int(id_user)))[0]
+        cur_limit = info_user[2]
+        pages = Info.person_pages[id_user]
+        is_ban = info_user[4]
+        full_path = os.path.join('C:\\Users\\samos\\PycharmProjects\\vk_print_bot\\files_to_send', Info.titles[id_user])
+        size_byte = os.stat(full_path).st_size
+        if size_byte > 20971520: # 20 Mb
+            Send.send_message_with_keyboard(bot, id_user, "Файл превышает 20 Мб!", not_enough_pages_keyboard)
             return State.CANT_PRINT
+
+        if is_ban == True:
+            Send.send_message(bot, id_user, "Вы заблокированы!")
+            return Info.positions_dict[id_user]
+        else:
+            text = f"Осталось {cur_limit} страниц. Вы хотите распечатать {pages} страниц. "
+            if cur_limit >= pages:
+                text += "Отправить на печать?"
+                Send.send_message_with_keyboard(bot, id_user, text, send_to_print_keyboard)
+                return State.LIMIT_OK
+            else:
+                text += "Вы не можете распечатать файл!"
+                Send.send_message_with_keyboard(bot, id_user, text, not_enough_pages_keyboard)
+                return State.CANT_PRINT
 
     @staticmethod
     def condition_send_print(bot, id_user):
-        with open(Info.titles[id_user], 'rb') as file:
-            pdf_reader = PyPDF2.PdfFileReader(file)
-            pages = pdf_reader.getNumPages()*Info.person_copies[id_user]
+        printer = Info.person_printer[id_user]
+        pages = Info.person_pages[id_user]
+        copies = Info.person_copies[id_user]
 
-        if DB.check_paper(Info.person_printer[id_user]) < pages:
-            Send.send_message_with_keyboard(bot, id_user, "Извините, в принтере недостаточно бумаги!", not_enough_pages_keyboard)
-            return State.CANT_PRINT
-        else:
-            DB.change_limit(id_user, pages)
-            Send.send_message_with_keyboard(bot, id_user, "Файл отправлен на печать. До новой встречи!", to_printer_keyboard)
-            Info.titles.pop(id_user)
-            DB.change_paper(Info.person_printer[id_user], pages)
-            Condition.condition_alarm_paper(bot, id_user)
+        req = server_addr + '/add_task?printer={}&user={}&task=print&file={}&pages={}&copies={}'.format(
+            printer,
+            id_user,
+            Info.titles[id_user],  # file
+            pages,
+            copies
+        )
+
+        all_pages = pages * copies
+        paper_in_printer = DB.get_paper_count_bd(printer)
+
+        if paper_in_printer < all_pages:
+            Send.send_message_with_keyboard(bot, id_user, "Извините, в принтере недостаточно бумаги!",
+                                            not_enough_pages_keyboard)
             Info.person_printer.pop(id_user)
             Info.person_copies.pop(id_user)
+            return State.CANT_PRINT
+        else:
+            print('print_action')
+            r = requests.post(req)
+            print(r.content)
+            Send.send_message_with_keyboard(bot, id_user, "Файл отправлен на печать. До новой встречи!",
+                                            to_printer_keyboard)
+            Info.titles.pop(id_user)
+            Info.person_printer.pop(id_user)
+            Info.person_copies.pop(id_user)
+
+            DB.set_limit(id_user, DB.data_by_id(int(id_user))[0][2] - all_pages)
+            DB.set_paper_count_bd(printer, paper_in_printer - all_pages)
+
+            Condition.condition_alarm_paper(bot, printer)
             return Condition.condition_choose_printer(bot, id_user)
 
     @staticmethod
-    def condition_alarm_paper(bot, id_user):
-        if DB.check_paper(Info.person_printer[id_user]) < 10:
-            for id in Info.admins:
-                Send.send_message(bot, id, f"Бумага в {Info.person_printer[id_user]} скоро закончится!")
+    def condition_alarm_paper(bot, printer):
+        if DB.get_paper_count_bd(printer) < 10:
+            if not DB.check_is_alarmed_bd(printer):
+                DB.set_is_alarmed_bd(printer, True)
+                for id in Info.admins:
+                    Send.send_message(bot, id, f"В {printer} менее 10 листов!")
+        else:
+            if DB.check_is_alarmed_bd(printer):
+                DB.set_is_alarmed_bd(printer, False)
+                for id in Info.admins:
+                    Send.send_message(bot, id, f"В {printer} добавлена бумага!")
 
     @staticmethod
     def condition_need_help(bot, id_user, text):
-        printer = Info.person_printer[id_user]
+        # printer = Info.person_printer[id_user]
         for id in Info.admins:
             Send.send_message(bot, id,
                               f"СООБЩЕНИЕ ОБ ОШИБКЕ\n"
-                              f"vk_id: {id_user}; printer: {printer}; file: {Info.titles[id_user]}\n"
+                              f"vk_id: {id_user}\n"
                               f"Текст сообщения:\n{text}")
         Send.send_message_with_keyboard(bot, id_user, "Сообщение успешно отправлено!", to_printer_keyboard)
-        return State.WAIT_FOR_START
+        return Condition.condition_choose_printer(bot, id_user)
 
     @staticmethod
     def admin_on(bot, id_user):
@@ -259,9 +289,9 @@ class Condition:
     @staticmethod
     def condition_clean_queue_one(bot, id_user):
         Send.send_message_with_keyboard(bot, id_user,
-                                        "",
-                                        default_keyboard)
-        return State
+                                        "Укажите название принтера",
+                                        printers_keyboard)
+        return State.CLEAR_QUEUE
 
     @staticmethod
     def condition_maintenance(bot, id_user):
@@ -282,16 +312,3 @@ class Condition:
                                         "Укажите vk_id нужного пользователя",
                                         default_keyboard)
         return State.ASK_INFO
-
-    # @staticmethod
-    # def print_action(id_user, context):
-    #     req = server_addr + '/add_task?printer={}&user={}&task=print&file={}&pages={}&copies={}'.format(
-    #         Info.person_printer[id_user], # printer
-    #         id_user, # user
-    #         Info.titles[id_user], # file
-    #         Info.person_pages[id_user], #pages
-    #         Info.person_pages[id_user] #copies
-    #     )
-    #     print('print_action')
-    #     r = requests.post(req, data={'token': token})
-    #     print(r.content)

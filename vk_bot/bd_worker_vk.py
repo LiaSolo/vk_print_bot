@@ -12,82 +12,93 @@ class DB:
         print(r.content)
         return eval(r.content)
 
+    # add new user
     @staticmethod
     def db_table_val(user_id: int, limit: int, isu: str):
         r = requests.post(server_addr + "/api/bd/{}".format('db_table_val'), data=
         {'user_id': user_id, 'limit': limit, 'isu': isu})
         print(r.content)
         # return r.content
+
+    # данные по тг/вк айди
+    @staticmethod
+    def data_by_id(user_id: int):
+        r = requests.post(server_addr + "/api/bd/{}".format('data_by_id'), data=
+        {'user_id': user_id})
+        return eval(r.content)
+
+    @staticmethod
+    def data_by_itmo_id(itmo_id: int):
+        r = requests.post(server_addr + "/api/bd/{}".format('data_by_itmo_id'), data=
+        {'itmo_id': itmo_id})
+        return eval(r.content)
+
+    # забанить/разбанить
+    @staticmethod
+    def ban_bd(key: str, value): # что за что отвечает ?
+        r = requests.post(server_addr + "/api/bd/{}".format('ban_bd'), data=
+        {'key': key, 'value': value})
+        return r.content
+
+    @staticmethod
+    def set_paper_count_bd(printer: str, value: int):
+        r = requests.post(server_addr + "/api/bd/{}".format('set_paper_count'), data=
+        {'printer': printer, 'value': value})
+        return r.content
+
+    @staticmethod
+    def get_paper_count_bd(printer: str):
+        r = requests.post(server_addr + "/api/bd/{}".format('get_paper_count'), data=
+        {'printer': printer})
+        return eval(r.content)
+
+    @staticmethod
+    def set_limit(user_id: int, count: int):
+        r = requests.post(server_addr + "/api/bd/{}".format('set_limit'), data=
+        {'user_id': user_id, 'count': count})
+        return r.content
+
+    @staticmethod
+    def check_is_alarmed_bd(printer: str):
+        r = requests.post(server_addr + "/api/bd/{}".format('check_is_alarmed'), data=
+        {'printer': printer})
+        return eval(r.content)
+
+    @staticmethod
+    def set_is_alarmed_bd(printer: str, value: bool):
+        r = requests.post(server_addr + "/api/bd/{}".format('set_is_alarmed'), data=
+        {'printer': printer, 'value': value})
+        return r.content
+
+    @staticmethod
+    def set_cancel_queue_flag_bd(printer: str, value: bool):
+        r = requests.post(server_addr + "/api/bd/{}".format('set_cancel_queue_flag'), data=
+        {'printer': printer, 'value': value})
+        print(r.content)
+        return r.content
+
+    @staticmethod
+    def get_statistics():
+        r = requests.post(server_addr + "/api/bd/{}".format('get_statistics'))
+        return r.content
+
+
+
+
+
+
+
+
     @staticmethod
     def create_connection():
         connection = psycopg2.connect(
-            # database="itmo_print_db",
-            # user="postgres",
-            # password="1",
-            database="mydb",
-            user="vk_bot",
-            password="2",
+            database="itmo_print_db",
+            user="postgres",
+            password="1",
             host="127.0.0.1",
             port="5432", )
         return connection
 
-    @staticmethod
-    def is_user_exist(user_id: str):
-        connection = DB.create_connection()
-        cursor = connection.cursor()
-        query = "SELECT EXISTS(SELECT 1 FROM users WHERE vk_id = %s)"
-        cursor.execute(query, (user_id,))
-        result = cursor.fetchone()
-        connection.commit()
-        cursor.close()
-        connection.close()
-        return result[0]
-
-    @staticmethod
-    def is_user_ban(user_id: str):
-        connection = DB.create_connection()
-        cursor = connection.cursor()
-        query = "SELECT is_ban FROM users WHERE vk_id = %s"
-        cursor.execute(query, (user_id,))
-        result = cursor.fetchone()
-        connection.commit()
-        cursor.close()
-        connection.close()
-        return result[0]
-
-    @staticmethod
-    def add_user(user_id: str):
-        connection = DB.create_connection()
-        cursor = connection.cursor()
-        query = "INSERT INTO users (vk_id, limits, is_ban) VALUES (%s, %s, %s)"
-        cursor.execute(query, (user_id, 100, False))
-        connection.commit()
-        cursor.close()
-        connection.close()
-
-    @staticmethod
-    def change_limit(user_id: str, minus: int):
-        connection = DB.create_connection()
-        cursor = connection.cursor()
-        current_limit = DB.check_limit(user_id)
-        new_limit = current_limit - minus
-        query = "UPDATE users SET limits = %s WHERE vk_id = %s"
-        cursor.execute(query, (new_limit, user_id))
-        connection.commit()
-        cursor.close()
-        connection.close()
-
-    @staticmethod
-    def check_limit(user_id: str):
-        connection = DB.create_connection()
-        cursor = connection.cursor()
-        query = "SELECT limits FROM users WHERE vk_id = %s"
-        cursor.execute(query, (user_id,))
-        limit = cursor.fetchone()
-        connection.commit()
-        cursor.close()
-        connection.close()
-        return limit[0]
 
     @staticmethod
     def change_ban(is_ban, user_id):
@@ -101,26 +112,3 @@ class DB:
         cursor.close()
         connection.close()
 
-    @staticmethod
-    def check_paper(printer: str):
-        connection = DB.create_connection()
-        cursor = connection.cursor()
-        query = "SELECT paper FROM printers WHERE printer_name = %s"
-        cursor.execute(query, (printer,))
-        limit = cursor.fetchone()
-        connection.commit()
-        cursor.close()
-        connection.close()
-        return limit[0]
-
-    @staticmethod
-    def change_paper(printer: str, minus):
-        connection = DB.create_connection()
-        cursor = connection.cursor()
-        current_paper = DB.check_paper(printer)
-        new_paper = current_paper - minus
-        query = "UPDATE printers SET paper = %s WHERE printer_name = %s"
-        cursor.execute(query, (new_paper, printer))
-        connection.commit()
-        cursor.close()
-        connection.close()

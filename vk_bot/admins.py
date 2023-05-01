@@ -2,6 +2,7 @@ from sender import Send
 from states import State
 from bd_worker_vk import DB
 from information import Info
+from conditions import Condition
 
 class Admin:
 
@@ -17,28 +18,38 @@ class Admin:
             Send.send_message(bot, admin_id, "Пользователь разблокирован!")
 
     @staticmethod
+    def get_statistics(bot, admin_id):
+        Send.send_message(bot, admin_id, DB.get_statistics())
+
+
+    @staticmethod
     def change_limit(bot, admin_id, text):
         text = str(text)
-        vk_id, param = text.split()
-        DB.change_limit(vk_id, -int(param))
+        vk_id, param = map(int, text.split())
+
+        DB.set_limit(vk_id, DB.data_by_id(vk_id)[0][2] + param)
         Send.send_message(bot, admin_id, "Лимит изменён!")
 
     @staticmethod
     def add_paper(bot, admin_id, text):
         text = str(text)
         printer, papers = text.split()
-        DB.change_paper(printer, -int(papers))
+
+        DB.set_paper_count_bd(printer, DB.get_paper_count_bd(printer) + int(papers))
+        Condition.condition_alarm_paper(bot, printer)
         Send.send_message(bot, admin_id, "Сведения о количестве листов изменены!")
 
     @staticmethod
     # заглушка
-    def clean_queue_one_printer():
-        print()
+    def clean_queue_one_printer(bot, admin_id, printer):
+        DB.set_cancel_queue_flag_bd(printer, True)
+        Send.send_message(bot, admin_id, "Запрос на очистку очереди печати на принтере отправлен")
 
     @staticmethod
     def ask_info(bot, admin_id, user_id: str):
-        if DB.is_user_exist(user_id):
-            answer = f"vk_id: {user_id}, limit: {DB.check_limit(user_id)}, is_ban: {DB.is_user_ban(user_id)}"
+        if DB.is_registred(user_id):
+            info_user = DB.data_by_id(user_id)[0]
+            answer = f"vk_id: {info_user[1]}, limit: {info_user[2]}, itmo_id: {info_user[3]} is_ban: {info_user[4]}"
         else:
             answer = "Пользователя с таким vk_id не существует"
         Send.send_message(bot, admin_id, answer)
