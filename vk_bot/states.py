@@ -20,3 +20,6 @@ class State(Enum):
     ASK_INFO = auto()
     ASK_COPIES = auto()
     CLEAR_QUEUE = auto()
+    ACTIVE_SESSION = auto()
+    WAIT_MAIL = auto()
+    WAIT_CODE = auto()

@@ -1,14 +1,18 @@
+import random
+
 from sender import Send
 from states import State
 from information import Info
 from vk_api.keyboard import VkKeyboard, VkKeyboardColor
 from bd_worker_vk import DB
-from vk_config import server_addr
+from vk_config import server_addr, email, email_password
 import os
-
 import requests
 import PyPDF2
 from datetime import datetime
+import smtplib
+from email.mime.multipart import MIMEMultipart
+from email.mime.text import MIMEText
 
 
 start_keyboard = VkKeyboard()
@@ -61,7 +65,6 @@ printers_keyboard.add_button("L364-Series", color=VkKeyboardColor.POSITIVE)
 printers_keyboard.add_button("ML-1660-Series", color=VkKeyboardColor.POSITIVE)
 
 
-
 class Condition:
 
     @staticmethod
@@ -73,10 +76,47 @@ class Condition:
     @staticmethod
     def condition_check_existing(bot, id_user):
         if not DB.is_registred(int(id_user)):
-            DB.db_table_val(int(id_user), 50, "it")
-            Send.send_message(bot, id_user, "Авторизация прошла успешно!")
-
+            Send.send_message(bot, id_user, "Необходима авторизация!")
+            return Condition.ask_mail(bot, id_user)
         return Condition.condition_choose_printer(bot, id_user)
+
+    @staticmethod
+    def auth_done(bot, id_user):
+        DB.db_table_val(int(id_user), 50, Info.person_st[id_user])
+        Info.person_st.pop(id_user)
+        Info.person_code.pop(id_user)
+        Send.send_message(bot, id_user, "Авторизация прошла успешно!")
+        return Condition.condition_choose_printer(bot, id_user)
+
+    @staticmethod
+    def ask_mail(bot, id_user):
+        Send.send_message(bot, id_user, 'Введите свой логин единой учетной записи в формате st******')
+        return State.WAIT_MAIL
+
+    @staticmethod
+    def send_code(bot, id_user, st):
+        code = ''
+        for i in range(4):
+            code += str(random.randint(0, 9))
+        Info.person_code[id_user] = code
+
+        address_to = st + '@student.spbu.ru'
+
+        message = MIMEMultipart()
+        message['From'] = email
+        message['To'] = address_to
+        message['Subject'] = 'Код для авторизации бота печати'
+        message.attach(MIMEText('Код: ' + code))
+
+        smtp_obj = smtplib.SMTP_SSL('smtp.yandex.ru', 465)
+
+        smtp_obj.login(email, email_password)
+        smtp_obj.send_message(message)
+        smtp_obj.quit()
+
+        Send.send_message(bot, id_user, 'Код для подтверждения отправлен на указанную электронную почту')
+        Send.send_message(bot, id_user, 'Введите код')
+        return State.WAIT_CODE
 
     @staticmethod
     def condition_choose_printer(bot, id_user):
@@ -167,8 +207,15 @@ class Condition:
     @staticmethod
     def condition_full_check(bot, id_user):
         info_user = (DB.data_by_id(int(id_user)))[0]
+        session = info_user[5]
+        if session:
+            Send.send_message_with_keyboard(bot, id_user, "Вы не можете печатать, "
+                                                          "так как у Вас уже есть активная сессия в telegram!",
+                                            default_keyboard)
+            return State.ACTIVE_SESSION
+
         cur_limit = info_user[2]
-        pages = Info.person_pages[id_user]
+        pages = Info.person_pages[id_user] * Info.person_copies[id_user]
         is_ban = info_user[4]
         full_path = os.path.join('C:\\Users\\samos\\PycharmProjects\\vk_print_bot\\files_to_send', Info.titles[id_user])
         size_byte = os.stat(full_path).st_size
@@ -176,7 +223,7 @@ class Condition:
             Send.send_message_with_keyboard(bot, id_user, "Файл превышает 20 Мб!", not_enough_pages_keyboard)
             return State.CANT_PRINT
 
-        if is_ban == True:
+        if is_ban:
             Send.send_message(bot, id_user, "Вы заблокированы!")
             return Info.positions_dict[id_user]
         else:
@@ -184,6 +231,7 @@ class Condition:
             if cur_limit >= pages:
                 text += "Отправить на печать?"
                 Send.send_message_with_keyboard(bot, id_user, text, send_to_print_keyboard)
+                DB.change_status_session(True, id_user)
                 return State.LIMIT_OK
             else:
                 text += "Вы не можете распечатать файл!"
@@ -212,6 +260,7 @@ class Condition:
                                             not_enough_pages_keyboard)
             Info.person_printer.pop(id_user)
             Info.person_copies.pop(id_user)
+            DB.change_status_session(False, id_user)
             return State.CANT_PRINT
         else:
             print('print_action')
@@ -225,6 +274,7 @@ class Condition:
 
             DB.set_limit(id_user, DB.data_by_id(int(id_user))[0][2] - all_pages)
             DB.set_paper_count_bd(printer, paper_in_printer - all_pages)
+            DB.change_status_session(False, id_user)
 
             Condition.condition_alarm_paper(bot, printer)
             return Condition.condition_choose_printer(bot, id_user)

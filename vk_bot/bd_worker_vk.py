@@ -99,6 +99,15 @@ class DB:
             port="5432", )
         return connection
 
+    @staticmethod
+    def change_status_session(is_active, user_id):
+        connection = DB.create_connection()
+        cursor = connection.cursor()
+        query = "UPDATE users SET session = %s WHERE user_id = %s"
+        cursor.execute(query, (is_active, user_id))
+        connection.commit()
+        cursor.close()
+        connection.close()
 
     @staticmethod
     def change_ban(is_ban, user_id):

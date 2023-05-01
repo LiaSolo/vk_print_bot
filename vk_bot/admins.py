@@ -1,18 +1,17 @@
 from sender import Send
-from states import State
 from bd_worker_vk import DB
-from information import Info
 from conditions import Condition
+
 
 class Admin:
 
     @staticmethod
-    def ban_or_unbun(bot, admin_id, text):
+    def ban_or_unban(bot, admin_id, text):
         text = str(text)
         vk_id, is_ban = text.split()
         is_ban = bool(is_ban)
         DB.change_ban(is_ban, vk_id)
-        if (is_ban):
+        if is_ban:
             Send.send_message(bot, admin_id, "Пользователь заблокирован!")
         else:
             Send.send_message(bot, admin_id, "Пользователь разблокирован!")
@@ -20,7 +19,6 @@ class Admin:
     @staticmethod
     def get_statistics(bot, admin_id):
         Send.send_message(bot, admin_id, DB.get_statistics())
-
 
     @staticmethod
     def change_limit(bot, admin_id, text):
@@ -46,8 +44,8 @@ class Admin:
         Send.send_message(bot, admin_id, "Запрос на очистку очереди печати на принтере отправлен")
 
     @staticmethod
-    def ask_info(bot, admin_id, user_id: str):
-        if DB.is_registred(user_id):
+    def ask_info(bot, admin_id, user_id):
+        if DB.is_registred(int(user_id)):
             info_user = DB.data_by_id(user_id)[0]
             answer = f"vk_id: {info_user[1]}, limit: {info_user[2]}, itmo_id: {info_user[3]} is_ban: {info_user[4]}"
         else:
@@ -62,5 +60,3 @@ class Admin:
             Send.send_message(bot, admin_id, "Режим ТО активирован")
         else:
             Send.send_message(bot, admin_id, "Режим ТО выключен")
-
-

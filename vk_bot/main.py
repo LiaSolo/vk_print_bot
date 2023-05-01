@@ -31,7 +31,7 @@ for event in VkBotLongPoll(bot, group_id).listen():
         print(Info.positions_dict)
 
         # надеюсь, что админы умные и не прописываю защиту от дураков
-        # ладно,  сама попалась, потом переделаю
+        # ладно, сама попалась, потом переделаю
         if user_text == '+admin' and id_user in Info.admins:
             position = Condition.admin_on(bot, id_user)
 
@@ -71,7 +71,7 @@ for event in VkBotLongPoll(bot, group_id).listen():
                 Admin.clean_queue_one_printer(bot, id_user, user_text)
 
         elif position == State.CHANGE_BAN:
-            Admin.ban_or_unbun(bot, id_user, user_text)
+            Admin.ban_or_unban(bot, id_user, user_text)
 
         elif position == State.CHANGE_LIMIT:
             Admin.change_limit(bot, id_user, user_text)
@@ -101,6 +101,19 @@ for event in VkBotLongPoll(bot, group_id).listen():
 
         elif position == State.CHECK_USER:
             position = Condition.condition_check_existing(bot, id_user)
+
+        elif position == State.WAIT_MAIL:
+            if user_text[:2] == 'st' and len(user_text) == 8:
+                Info.person_st[id_user] = user_text
+                position = Condition.send_code(bot, id_user, user_text)
+            else:
+                Send.send_message(bot, id_user, 'Неверный формат ввода')
+
+        elif position == State.WAIT_CODE:
+            if user_text == Info.person_code[id_user]:
+                position = Condition.auth_done(bot, id_user)
+            else:
+                Send.send_message(bot, id_user, 'Неверный код!')
 
         elif position == State.CHOOSE_PRINTER:
             if user_text == "L364-Series" or user_text == "ML-1660-Series":
@@ -143,6 +156,10 @@ for event in VkBotLongPoll(bot, group_id).listen():
                 position = Condition.condition_full_check(bot, id_user)
             else:
                 Send.send_message(bot, id_user, 'Введите натуральное число!')
+
+        elif position == State.ACTIVE_SESSION:
+            if user_text == "Назад":
+                position = Condition.condition_ask_copies(bot, id_user)
 
         elif position == State.CANT_PRINT:
             if user_text == "К выбору принтера":
