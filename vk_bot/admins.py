@@ -18,7 +18,10 @@ class Admin:
 
     @staticmethod
     def get_statistics(bot, admin_id):
-        Send.send_message(bot, admin_id, DB.get_statistics())
+        info = DB.get_statistics()
+        # print(info)
+        # text = f"Распечатано страниц: {info[0]}. Пользователей авторизовано: {info[1]}"
+        Send.send_message(bot, admin_id, info)
 
     @staticmethod
     def change_limit(bot, admin_id, text):

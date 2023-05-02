@@ -43,7 +43,7 @@ start_keyboard.add_button("Начать", color=VkKeyboardColor.POSITIVE)
 extra_settings_keyboard = VkKeyboard()
 extra_settings_keyboard.add_button("Выбрать определённые страницы", color=VkKeyboardColor.POSITIVE)
 extra_settings_keyboard.add_line()
-extra_settings_keyboard.add_button("Распечатать весь файл", color=VkKeyboardColor.NEGATIVE)
+extra_settings_keyboard.add_button("Распечатать весь файл", color=VkKeyboardColor.POSITIVE)
 extra_settings_keyboard.add_line()
 extra_settings_keyboard.add_button("Назад", color=VkKeyboardColor.NEGATIVE)
 
@@ -82,7 +82,11 @@ class Condition:
 
     @staticmethod
     def auth_done(bot, id_user):
-        DB.db_table_val(int(id_user), 50, Info.person_st[id_user])
+        info = DB.data_by_itmo_id(Info.person_st[id_user])
+        if info == []:
+            DB.db_table_val(int(id_user), 50, Info.person_st[id_user])
+        else:
+            DB.add_vk(id_user, info[0][3])
         Info.person_st.pop(id_user)
         Info.person_code.pop(id_user)
         Send.send_message(bot, id_user, "Авторизация прошла успешно!")
@@ -205,15 +209,23 @@ class Condition:
         return State.ASK_COPIES
 
     @staticmethod
+    def active_session_exist(bot, id_user):
+        what_session = (DB.data_by_id(int(id_user)))[0][5]
+        if what_session == 'vk':
+            DB.change_status_session('none', id_user)
+        return Condition.condition_ask_copies(bot, id_user)
+
+    @staticmethod
     def condition_full_check(bot, id_user):
         info_user = (DB.data_by_id(int(id_user)))[0]
         session = info_user[5]
-        if session:
+        if session != 'none':
             Send.send_message_with_keyboard(bot, id_user, "Вы не можете печатать, "
                                                           "так как у Вас уже есть активная сессия в telegram!",
                                             default_keyboard)
             return State.ACTIVE_SESSION
 
+        DB.change_status_session('vk', id_user)
         cur_limit = info_user[2]
         pages = Info.person_pages[id_user] * Info.person_copies[id_user]
         is_ban = info_user[4]
@@ -221,21 +233,23 @@ class Condition:
         size_byte = os.stat(full_path).st_size
         if size_byte > 20971520: # 20 Mb
             Send.send_message_with_keyboard(bot, id_user, "Файл превышает 20 Мб!", not_enough_pages_keyboard)
+            DB.change_status_session('none', id_user)
             return State.CANT_PRINT
 
         if is_ban:
             Send.send_message(bot, id_user, "Вы заблокированы!")
+            DB.change_status_session('none', id_user)
             return Info.positions_dict[id_user]
         else:
             text = f"Осталось {cur_limit} страниц. Вы хотите распечатать {pages} страниц. "
             if cur_limit >= pages:
                 text += "Отправить на печать?"
                 Send.send_message_with_keyboard(bot, id_user, text, send_to_print_keyboard)
-                DB.change_status_session(True, id_user)
                 return State.LIMIT_OK
             else:
                 text += "Вы не можете распечатать файл!"
                 Send.send_message_with_keyboard(bot, id_user, text, not_enough_pages_keyboard)
+                DB.change_status_session('none', id_user)
                 return State.CANT_PRINT
 
     @staticmethod
@@ -260,7 +274,7 @@ class Condition:
                                             not_enough_pages_keyboard)
             Info.person_printer.pop(id_user)
             Info.person_copies.pop(id_user)
-            DB.change_status_session(False, id_user)
+            DB.change_status_session('none', id_user)
             return State.CANT_PRINT
         else:
             print('print_action')
@@ -274,7 +288,7 @@ class Condition:
 
             DB.set_limit(id_user, DB.data_by_id(int(id_user))[0][2] - all_pages)
             DB.set_paper_count_bd(printer, paper_in_printer - all_pages)
-            DB.change_status_session(False, id_user)
+            DB.change_status_session('none', id_user)
 
             Condition.condition_alarm_paper(bot, printer)
             return Condition.condition_choose_printer(bot, id_user)
