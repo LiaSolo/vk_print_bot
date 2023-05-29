@@ -1,12 +1,11 @@
 import requests
-from vk_config import server_addr, api_token
+from vk_config import api_token, server_addr
 
 
 class DB:
-
     @staticmethod
-    def is_registred(user_id: int):
-        r = requests.post(server_addr + "/api/bd/{}".format('is_registred'),
+    def is_registered(user_id: int):
+        r = requests.post(server_addr + "/api/bd/{}".format('is_registered'),
                           data={'token': api_token, 'user_id': user_id, 'vk_or_tg': 'vk'})
         print(r.content)
         return eval(r.content)
@@ -16,9 +15,8 @@ class DB:
     def db_table_val(user_id: int, limit: int, isu: str):
         requests.post(server_addr + "/api/bd/{}".format('db_table_val'),
                       data={'token': api_token, 'user_id': user_id, 'limit': limit, 'isu': isu, 'vk_or_tg': 'vk'})
-        # print(r.content)
 
-    # данные по вк айди
+    # data by vk id
     @staticmethod
     def data_by_id(user_id: int):
         r = requests.post(server_addr + "/api/bd/{}".format('data_by_id'),

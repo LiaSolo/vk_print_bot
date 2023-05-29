@@ -14,4 +14,3 @@ class Send:
         bot.get_api().messages.send(user_id=user_id,
                                     message=text_message,
                                     random_id=get_random_id())
-
